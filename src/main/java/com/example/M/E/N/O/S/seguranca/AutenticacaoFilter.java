@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -20,9 +21,12 @@ public class AutenticacaoFilter extends OncePerRequestFilter {
     public static final String SESSAO = "menos.sessao";
 
     private final TokenJwt tokens;
+    private final OrigensPermitidas origens;
 
-    public AutenticacaoFilter(TokenJwt tokens) {
+    public AutenticacaoFilter(TokenJwt tokens,
+                              @Value("${menos.cors.origens:http://localhost:5173}") String[] origens) {
         this.tokens = tokens;
+        this.origens = new OrigensPermitidas(origens);
     }
 
     @Override
@@ -39,18 +43,18 @@ public class AutenticacaoFilter extends OncePerRequestFilter {
 
         String cabecalho = requisicao.getHeader("Authorization");
         if (cabecalho == null || !cabecalho.startsWith("Bearer ")) {
-            recusar(resposta, HttpServletResponse.SC_UNAUTHORIZED, Permissoes.FAZER_LOGIN);
+            recusar(requisicao, resposta, HttpServletResponse.SC_UNAUTHORIZED, Permissoes.FAZER_LOGIN);
             return;
         }
         Optional<Sessao> sessao = tokens.validar(cabecalho.substring("Bearer ".length()).trim());
         if (sessao.isEmpty()) {
-            recusar(resposta, HttpServletResponse.SC_UNAUTHORIZED, "Sessão expirada. Entre novamente");
+            recusar(requisicao, resposta, HttpServletResponse.SC_UNAUTHORIZED, "Sessão expirada. Entre novamente");
             return;
         }
 
         String motivo = Permissoes.verificar(metodo, caminho, sessao.get(), requisicao::getParameter);
         if (motivo != null) {
-            recusar(resposta, HttpServletResponse.SC_FORBIDDEN, motivo);
+            recusar(requisicao, resposta, HttpServletResponse.SC_FORBIDDEN, motivo);
             return;
         }
 
@@ -59,7 +63,14 @@ public class AutenticacaoFilter extends OncePerRequestFilter {
     }
 
     // Mesmo formato dos outros erros da API ({ "message": "..." }), que o front já sabe mostrar.
-    private static void recusar(HttpServletResponse resposta, int status, String mensagem) throws IOException {
+    // Leva os cabeçalhos de CORS para o site liberado conseguir ler o erro (ex.: voltar ao login quando a sessão vence).
+    private void recusar(HttpServletRequest requisicao, HttpServletResponse resposta, int status, String mensagem)
+            throws IOException {
+        String origem = origens.paraResposta(requisicao.getHeader("Origin"));
+        if (origem != null) {
+            resposta.setHeader("Access-Control-Allow-Origin", origem);
+            resposta.setHeader("Vary", "Origin");
+        }
         resposta.setStatus(status);
         resposta.setContentType("application/json;charset=UTF-8");
         resposta.getOutputStream().write(("{\"message\":\"" + mensagem + "\"}").getBytes(StandardCharsets.UTF_8));
