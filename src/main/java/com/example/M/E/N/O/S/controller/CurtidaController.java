@@ -7,6 +7,9 @@ import com.example.M.E.N.O.S.service.CurtidaService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import com.example.M.E.N.O.S.seguranca.Acesso;
+import com.example.M.E.N.O.S.seguranca.AutenticacaoFilter;
+import com.example.M.E.N.O.S.seguranca.Sessao;
 
 @RestController
 @RequestMapping("/curtidas")
@@ -21,7 +24,9 @@ public class CurtidaController {
     // Aluno curte um cardápio
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Curtida curtir(@Valid @RequestBody CurtidaRequest request) {
+    public Curtida curtir(@Valid @RequestBody CurtidaRequest request,
+                           @RequestAttribute(AutenticacaoFilter.SESSAO) Sessao sessao) {
+        Acesso.exigirAluno(sessao, request.estudanteId());
         return curtidaService.curtir(request);
     }
 

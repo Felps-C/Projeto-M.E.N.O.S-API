@@ -12,6 +12,9 @@ import com.example.M.E.N.O.S.service.VotoService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import com.example.M.E.N.O.S.seguranca.Acesso;
+import com.example.M.E.N.O.S.seguranca.AutenticacaoFilter;
+import com.example.M.E.N.O.S.seguranca.Sessao;
 
 import java.util.List;
 
@@ -81,7 +84,9 @@ public class EnqueteController {
     // Aluno vota
     @PostMapping("/{id}/votos")
     @ResponseStatus(HttpStatus.CREATED)
-    public Voto votar(@PathVariable Long id, @Valid @RequestBody VotoRequest request) {
+    public Voto votar(@PathVariable Long id, @Valid @RequestBody VotoRequest request,
+                       @RequestAttribute(AutenticacaoFilter.SESSAO) Sessao sessao) {
+        Acesso.exigirAluno(sessao, request.estudanteId());
         return votoService.votar(id, request);
     }
 
